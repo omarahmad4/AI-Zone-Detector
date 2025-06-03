@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertTriangle, VideoOff, Video } from 'lucide-react';
 import type { Detection, Zone } from '@/lib/types';
+import { useToast } from "@/hooks/use-toast";
 
 const PYTHON_API_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || 'http://localhost:5000';
 
@@ -18,6 +20,7 @@ export default function WebcamFeed() {
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
+  const { toast } = useToast();
 
   const drawOverlay = () => {
     const video = videoRef.current;
@@ -92,15 +95,24 @@ export default function WebcamFeed() {
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({ detail: 'Failed to parse error from backend.' }));
-        console.error('Backend error:', errData.detail || response.statusText);
+        console.error('Backend error during /detect:', errData.detail || response.statusText);
         // Potentially set a transient error message for the user
+        toast({
+            variant: "destructive",
+            title: "Detection Error",
+            description: `Could not get detections: ${errData.detail || response.statusText}. Is the Python backend running?`,
+        });
       } else {
         const data = await response.json();
         if (data.detections) setDetections(data.detections);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending frame to backend:', err);
-      // setError('Failed to connect to detection backend. Is it running?');
+      toast({
+        variant: "destructive",
+        title: "Detection Connection Error",
+        description: "Failed to connect to the detection backend. Please ensure it's running and accessible.",
+      });
     }
     
     drawOverlay();
@@ -116,10 +128,11 @@ export default function WebcamFeed() {
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = () => { // Ensure video dimensions are available
+          videoRef.current.onloadedmetadata = () => { 
              videoRef.current?.play().catch(e => {
                 console.error("Error playing video:", e);
                 setError("Could not play video stream.");
+                toast({ variant: "destructive", title: "Playback Error", description: "Could not play video stream."});
              });
              setIsWebcamActive(true);
              setIsLoading(false);
@@ -127,11 +140,13 @@ export default function WebcamFeed() {
         }
       } else {
         setError('getUserMedia not supported in this browser.');
+        toast({ variant: "destructive", title: "Browser Error", description: "getUserMedia not supported."});
         setIsLoading(false);
       }
     } catch (err) {
       console.error('Error accessing webcam:', err);
       setError('Failed to access webcam. Please check permissions.');
+      toast({ variant: "destructive", title: "Webcam Access Denied", description: "Failed to access webcam. Please check permissions."});
       setIsLoading(false);
     }
   };
@@ -156,12 +171,23 @@ export default function WebcamFeed() {
     const fetchZones = async () => {
       try {
         const response = await fetch(`${PYTHON_API_URL}/zones`);
-        if (!response.ok) throw new Error('Failed to fetch zones from backend.');
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({ detail: "Unknown error fetching zones."}));
+            throw new Error(errData.detail || `Failed to fetch zones: ${response.statusText}`);
+        }
         const data = await response.json();
         if (data.zones) setCurrentZones(data.zones);
       } catch (err: any) {
         console.error('Error fetching zones:', err);
-        // Don't set main error for this, as detection might still work
+        const errorMessage = err.message.includes('fetch') ? 
+          'Failed to connect to backend to fetch zones. Is the Python backend running and accessible?' : 
+          err.message;
+        setError(errorMessage); // Set error for main display
+        toast({
+            variant: "destructive",
+            title: "Zone Loading Error",
+            description: errorMessage,
+        });
       }
     };
     fetchZones();
@@ -194,29 +220,29 @@ export default function WebcamFeed() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWebcamActive, detections, currentZones]); // Rerun if detections or zones change to redraw overlay
 
-  if (isLoading && !isWebcamActive) {
+  if (isLoading && !isWebcamActive && !error) { // Don't show loading if there's already an error
     return (
       <div className="flex flex-col items-center justify-center h-96 rounded-lg border border-dashed bg-muted/50">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Initializing webcam...</p>
+        <p className="mt-4 text-muted-foreground">Initializing webcam and loading zones...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !isWebcamActive) { // If webcam couldn't start due to a persistent error (like zones failing AND webcam access)
     return (
       <Alert variant="destructive" className="mb-4">
         <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Webcam Error</AlertTitle>
+        <AlertTitle>Initialization Error</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
-        <Button onClick={startWebcam} className="mt-4">Try Again</Button>
+        <Button onClick={() => { setError(null); startWebcam(); }} className="mt-4">Try Again</Button>
       </Alert>
     );
   }
   
   return (
     <div className="relative aspect-video w-full max-w-4xl mx-auto bg-card border rounded-lg shadow-lg overflow-hidden">
-      {!isWebcamActive && !isLoading ? (
+      {!isWebcamActive && !isLoading && !error ? ( // Show if webcam is off, not loading, and no major error prevented it
          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10">
             <VideoOff className="h-16 w-16 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">Webcam is off or not found.</p>
@@ -245,7 +271,7 @@ export default function WebcamFeed() {
           <VideoOff className="mr-2 h-4 w-4" /> Stop Webcam
         </Button>
       )}
-       {isLoading && isWebcamActive && (
+       {isLoading && isWebcamActive && ( // Loading spinner specifically when webcam is active but something is loading (e.g., first frame processing)
          <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
          </div>
@@ -253,3 +279,5 @@ export default function WebcamFeed() {
     </div>
   );
 }
+
+    
