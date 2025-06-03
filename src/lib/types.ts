@@ -20,27 +20,3 @@ export interface Detection {
 export interface LastSeenRecord extends Detection {
   // Inherits object, zone, timestamp
 }
-
-// For the generateZoneConfig AI flow
-export interface GeneratedZone {
-  name: string;
-  polygon: Point[]; // Coordinates from AI are also expected to be relative
-}
-
-export interface GenerateZoneConfigInput {
-  photoDataUri: string;
-}
-
-export interface GenerateZoneConfigOutput {
-  zones: GeneratedZone[];
-}
-
-// For the generateDetectionReport AI flow
-export interface GenerateDetectionReportInput {
-  startTime: string; // ISO format
-  endTime: string; // ISO format
-}
-
-export interface GenerateDetectionReportOutput {
-  report: string; // The summary report text
-}

@@ -6,9 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, Upload, Wand2, Save, Trash2, PlusCircle, MapPin } from 'lucide-react';
-import type { Zone, Point, GenerateZoneConfigOutput, GeneratedZone } from '@/lib/types';
-import { generateZoneConfig } from '@/ai/flows/generate-zone-config';
+import { Loader2, AlertTriangle, Upload, Save, Trash2, PlusCircle } from 'lucide-react';
+import type { Zone, Point } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 
@@ -121,25 +120,6 @@ export default function ZoneEditor() {
     }
   };
 
-  const handleGenerateZonesAI = async () => {
-    if (!uploadedImage) {
-      toast({ title: "Upload Image", description: "Please upload an image first to generate zones.", variant: "destructive" });
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const result: GenerateZoneConfigOutput = await generateZoneConfig({ photoDataUri: uploadedImage });
-      setZones(result.zones.map(z => ({ name: z.name, polygon: z.polygon.map(p => ({x: p.x, y: p.y})) }))); // Ensure structure matches Zone[]
-      toast({ title: "AI Zones Generated", description: "Zones suggested by AI. Review and save.", variant: "default" });
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate zones using AI.');
-      toast({ title: "AI Error", description: err.message || 'Failed to generate zones using AI.', variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleSaveZones = async () => {
     setIsSubmitting(true);
     setError(null);
@@ -221,12 +201,6 @@ export default function ZoneEditor() {
             </div>
             <canvas ref={canvasRef} width="640" height="480" className="w-full border rounded-md bg-muted/20" data-ai-hint="security camera view"></canvas>
         </CardContent>
-        <CardFooter className="gap-2">
-            <Button onClick={handleGenerateZonesAI} disabled={isSubmitting || !uploadedImage}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                Suggest Zones with AI
-            </Button>
-        </CardFooter>
       </Card>
 
       <Card>
@@ -278,7 +252,7 @@ export default function ZoneEditor() {
               </div>
             </Card>
           ))}
-          {zones.length === 0 && <p className="text-muted-foreground text-center py-4">No zones configured. Add a zone or use AI to suggest them.</p>}
+          {zones.length === 0 && <p className="text-muted-foreground text-center py-4">No zones configured. Add a zone to get started.</p>}
         </CardContent>
         <CardFooter>
             <Button onClick={handleSaveZones} disabled={isSubmitting || zones.length === 0}>

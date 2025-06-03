@@ -8,7 +8,7 @@ export default function ZonesPage() {
         <CardHeader>
           <CardTitle className="font-headline">Manage Detection Zones</CardTitle>
           <CardDescription>
-            Define polygonal areas for object detection. You can upload an image of your camera view to get AI-suggested zone configurations.
+            Define polygonal areas for object detection. You can upload an image of your camera view to help manually configure zones.
           </CardDescription>
         </CardHeader>
         <CardContent>
